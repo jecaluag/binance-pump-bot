@@ -41,7 +41,8 @@ class Bot {
     fills: [                                  
       {                                       
         // price: '0.00002813',                  
-        price: '0.01289500',                  
+        // price: '0.00010999',                  
+        price: '0.00009053',                  
         qty: '10.00000000',                   
         commission: '0.01000000',             
         commissionAsset: 'SKY',               
@@ -51,7 +52,8 @@ class Bot {
   } 
   _order_fill = {                                       
     // price: '0.00002813',                  
-    price: '0.01289500',                  
+    // price: '0.00010999',                  
+    price: '0.00009053',                  
     qty: '10.00000000',                   
     commission: '0.01000000',             
     commissionAsset: 'SKY',               
@@ -64,7 +66,7 @@ class Bot {
    * Run the bot
    */
   async run () {
-    this.printBotTitle()
+    // this.printBotTitle()
     await this.connectToBinance()
     await this.getBalance()
     console.log(`Available BTC: ${this._btcBalance}`)
@@ -102,11 +104,13 @@ class Bot {
     rl.question("Coin name: ", (coinAns) => {
       this.validateInput(coinAns.trim(), false, 'askCoinName')
       this._coinName = coinAns.trim()
+      this.newLine()
       this.placeMarketBuy()
     })
   }
 
   async placeMarketBuy () {
+    console.log(`[${this.getTime()}]` ,'Placing market order...')
     const pair = `${this._coinName.toUpperCase()}${this.__PAIR}`
     try {
       // this._order = await this._binanceClient.order({
@@ -150,17 +154,63 @@ class Bot {
       console.log('\tExecuted Quantity:', +this._order.executedQty)
       console.log('\tAmount Quantity:', +this._order.origQty)
       console.log('\tAverage Price: ', +this._order_fill.price)
+      this.newLine()
       this.requestSellOrder()
     }
   }
 
-  requestSellOrder () {
-    const buyPrice = +this._order_fill.price
-    const sellPrice = buyPrice * this._takeProfit
-    this.newLine()
-    console.log('Requesting OCO irder...')
+  // getSellOrderPrice (price, noOfDecPlaces) {
+  //   if ((noOfDecPlaces > 0) && (this.countDecimal(price) > noOfDecPlaces)) {
+  //     // return roundTo(price, noOfDecPlaces)
+  //     return price.toFixed(noOfDecPlaces)
+  //     // return price
+  //   }
 
-    
+  //   return price
+  // }
+
+  getSellOrderPrice (price) {
+    const buyPrice = +this._order_fill.price
+    const noOfDecPlaces = this.countDecimal(buyPrice)
+    const newPrice = (buyPrice * (price / 100)) 
+    if ((noOfDecPlaces > 0) && (this.countDecimal(newPrice) > noOfDecPlaces)) {
+      return newPrice.toFixed(noOfDecPlaces)
+    }
+
+    return price
+  }
+
+  printAndGetSellOrderConfig () {
+    const sellPrice = this.getSellOrderPrice(this._takeProfit)
+    const stopPrice = this.getSellOrderPrice(this._stopValue)
+    const stopLimitPrice = this.getSellOrderPrice(this._stopLimitValue)
+    this.newLine()
+    console.log(`Take profit at ${sellPrice} (${this._takeProfit}%)`)
+    console.log(`Stop at ${sellPrice} (${this._stopValue}%)`)
+    console.log(`Stop limit at ${stopLimitPrice} (${this._stopLimitValue}%)`)
+    this.newLine()
+    console.log(`[${this.getTime()}]` ,'Requesting OCO order...')
+
+    return [sellPrice, stopPrice, stopLimitPrice]
+  }
+
+  requestSellOrder () {
+    const [sellPrice, stopPrice, stopLimitPrice] = this.printAndGetSellOrderConfig()
+    const pair = `${this._coinName.toUpperCase()}${this.__PAIR}`
+    // try {
+    //   const response = this._binanceClient.orderOco({
+    //     symbol: pair,
+    //     side: 'SELL',
+    //     quantity: +this._order.executedQty,
+    //     price: sellPrice,
+    //     stopPrice: stopPrice,
+    //     stopLimitPrice: stopLimitPrice
+    //   })
+    //   console.log({ response })
+    // } catch (error) {
+    //   console.log({ error: error.message })
+    // }
+
   }
 
   /**
@@ -269,7 +319,15 @@ class Bot {
   }
 
   getTime () {
-    return moment(Math.round(+new Date()/1000)).format("DD-MM-YYYY h:mm:ss")
+    return moment(new Date().valueOf()).format("DD-MM-YYYY h:mm:ss")
+  }
+
+  countDecimal (value) {
+    if (Math.floor(value) !== value) {
+      return value.toString().split(".")[1].length || 0
+    }
+        
+    return 0
   }
 
   printBotTitle () {
