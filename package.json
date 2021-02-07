@@ -12,14 +12,10 @@
   "author": "John Erniemar Caluag",
   "license": "ISC",
   "dependencies": {
-    "axios": "^0.21.1",
     "binance-api-node": "^0.10.26",
-    "dot-env": "0.0.1",
     "esm": "^3.2.25",
     "ini": "^2.0.0",
-    "moment": "^2.29.1",
-    "node-binance-api": "^0.12.4",
-    "round-to": "^5.0.0"
+    "moment": "^2.29.1"
   },
   "devDependencies": {
     "nodemon": "^2.0.7"
