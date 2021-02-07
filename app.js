@@ -3,7 +3,6 @@ import fs from 'fs'
 import ini from 'ini'
 import Binance from 'binance-api-node'
 import moment from 'moment'
-import roundTo from 'round-to'
 
 import Messages from './constants'
 
@@ -11,9 +10,6 @@ const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
 });
-
-const TEST_API_KEY = '61gDpbIPvrL2MDjI4QS6w0X4rT0ZDURzCepGcpLh36z6zyBJz7JSDFuKV2XDcFeO'
-const TEST_API_SECRET = 'FTYcU6KSIbqCVgnVy3wNlsUgpMS7UXQFTJ70vU6hSxZ02dystqlehpglYjqplc3l'
 
 class Bot {
   _binanceClient = null
@@ -24,44 +20,8 @@ class Bot {
   _takeProfit = 0
   _btcToUse = 0
   _coinName = ''
-  _order = {                                           
-    symbol: 'SKYBTC',                         
-    orderId: 48819953,                        
-    orderListId: -1,                          
-    clientOrderId: 'ZQ4Nuzsg7eQ3BrJUIcovRm',  
-    transactTime: 1612507184051,              
-    price: '0.00000000',                      
-    origQty: '10.00000000',                                
-    executedQty: '10.00000000',               
-    cummulativeQuoteQty: '0.00028130',        
-    status: 'FILLED',                         
-    timeInForce: 'GTC',                       
-    type: 'MARKET',                           
-    side: 'BUY',                              
-    fills: [                                  
-      {                                       
-        // price: '0.00002813',                  
-        price: '0.00010999',                  
-        // price: '0.00009053',                  
-        // price: '0.00001476',                  
-        qty: '10.00000000',                   
-        commission: '0.01000000',             
-        commissionAsset: 'SKY',               
-        tradeId: 7022727                      
-      }                                       
-    ]                                         
-  } 
-  _order_fill = {                                       
-    // price: '0.00002813',                  
-    price: '0.00010999',                  
-    // price: '0.00009053',                  
-    // price: '0.00001476',                  
-    qty: '10.00000000',                   
-    commission: '0.01000000',             
-    commissionAsset: 'SKY',               
-    tradeId: 7022727                      
-  }      
-
+  _order = null
+  _order_fill = null
   __PAIR = 'BTC'
 
   /**
@@ -70,60 +30,105 @@ class Bot {
   async run () {
     // this.printBotTitle()
     await this.connectToBinance()
+    this.startBot()
+  }
+
+  async startBot () {
     await this.getBalance()
     console.log(`Available BTC: ${this._btcBalance}`)
-    console.log(`Available USDT: 1889.67`)
+    console.log(`Available USDT: ${this._usdtBalance}`)
     console.log(`Stop at ${this._stopValue}%. Stop limit at ${this._stopLimitValue}%. (You can change this value in future/next update).`)
-    // console.log(`Available USDT: ${this._usdtBalance}`)
     this.processQuestions()
   }
 
   processQuestions () {
-    // this.resetInputValues()
+    this.resetInputValues()
     this.askTakeProfit ()
   }
 
   askTakeProfit () {
     this.newLine()
     rl.question("Take profit at (%): ", (profitAns) => {
-      this.validateInput(profitAns.trim(), true, 'askTakeProfit')
-      this._takeProfit = profitAns.trim()
-      this.askBtcToUse()
+      if (this.validateInput(profitAns.trim(), true, 'askTakeProfit') === true) {
+        this._takeProfit = profitAns.trim()
+        this.askBtcToUse()
+      }
     })
   }
   
   askBtcToUse() {
     this.newLine()
     rl.question("Total BTC to use: ", (totalAns) => {
-      this.validateInput(totalAns.trim(), true, 'askBtcToUse')
-      this._btcToUse = totalAns.trim()
-      this.askCoinName()
+      if (this.validateInput(totalAns.trim(), true, 'askBtcToUse') === true) {
+        this._btcToUse = totalAns.trim()
+        this.askCoinName()
+      }
     })
   }
   
   askCoinName () {
     this.newLine()
     rl.question("Coin name: ", (coinAns) => {
-      this.validateInput(coinAns.trim(), false, 'askCoinName')
-      this._coinName = coinAns.trim()
-      this.newLine()
-      this.placeMarketBuy()
+      if (this.validateInput(coinAns.trim(), false, 'askCoinName') === true) {
+        this._coinName = coinAns.trim()
+        this.newLine()
+        // this.placeMarketBuy()
+      }
     })
+  }
+
+  /**
+   * Validate user input
+   * @param {*} input - string
+   * @param {*} shouldBeNumber - boolean
+   * @param {*} question - function
+   */
+  validateInput (input, shouldBeNumber, question) {
+    if (input === '') {
+      console.log('\x1b[33m%s\x1b[0m', Messages.EMPTY_VALUE)
+      this[question]()
+
+      return false
+    }
+    if (shouldBeNumber) {
+      const regExp = /^[0-9]*\.?[0-9]*$/;
+      if (input.match(regExp) === null) {
+        console.log('\x1b[33m%s\x1b[0m', Messages.NUMBER_ONLY)
+        this[question]()
+
+        return false
+      }
+      if (input < 0) {
+        console.log('\x1b[33m%s\x1b[0m', Messages.LIMIT_ZERO)
+        this[question]()
+
+        return false
+      }
+    }
+    if (question.name === 'askBtcToUse') {
+      if (input > _btcBalance) {
+        console.log('\x1b[33m%s\x1b[0m', 'Value should not be more than available BTC')
+        question()
+
+        return false
+      }
+    }
+
+    return true
   }
 
   async placeMarketBuy () {
     console.log(`[${this.getTime()}]` ,'Placing market order...')
     const pair = `${this._coinName.toUpperCase()}${this.__PAIR}`
     try {
-      // this._order = await this._binanceClient.order({
-      //   symbol: pair,
-      //   side: 'BUY',
-      //   type: 'MARKET',
-      //   quoteOrderQty: +this._btcToUse
-      // })
-      // const [ fill ] = this._order.fills.slice(-1)
-      // this._order_fill = fill
-      // console.log(this._order)
+      this._order = await this._binanceClient.order({
+        symbol: pair,
+        side: 'BUY',
+        type: 'MARKET',
+        quoteOrderQty: +this._btcToUse
+      })
+      const [ fill ] = this._order.fills.slice(-1)
+      this._order_fill = fill
       this.printOrder()
     } catch (error) {
       this._order = null
@@ -177,10 +182,6 @@ class Bot {
     const stopPrice = this.getSellOrderPrice(this._stopValue)
     const stopLimitPrice = this.getSellOrderPrice(this._stopLimitValue)
     this.newLine()
-    console.log(`> Take profit at ${sellPrice} (${this._takeProfit}%)`)
-    console.log(`> Stop at ${stopPrice} (${this._stopValue}%)`)
-    console.log(`> Stop limit at ${stopLimitPrice} (${this._stopLimitValue}%)`)
-    this.newLine()
     console.log(`[${this.getTime()}]` ,'Requesting OCO order...')
 
     return [sellPrice, stopPrice, stopLimitPrice]
@@ -189,50 +190,59 @@ class Bot {
   async requestSellOrder () {
     const [sellPrice, stopPrice, stopLimitPrice] = this.printAndGetSellOrderConfig()
     const pair = `${this._coinName.toUpperCase()}${this.__PAIR}`
-    // try {
-    //   const response = await this._binanceClient.orderOco({
-    //     symbol: pair,
-    //     side: 'SELL',
-    //     quantity: +this._order.executedQty,
-    //     price: sellPrice,
-    //     stopPrice: stopPrice,
-    //     stopLimitPrice: stopLimitPrice
-    //   })
-    //   console.log({ response })
-    // } catch (error) {
-    //   console.log('nag error')
-    //   console.log({ error: error.message })
-    // }
+    try {
+      const response = await this._binanceClient.orderOco({
+        symbol: pair,
+        side: 'SELL',
+        quantity: +this._order.executedQty,
+        price: sellPrice,
+        stopPrice: stopPrice,
+        stopLimitPrice: stopLimitPrice
+      })
+      this.printSellOrder(response)
+    } catch (error) {
+      console.log('\x1b[41m%s\x1b[0m', 'Failed to request OCO order.')
+      if (error.message.split(':').length > 1) {
+        const errorCode = error.message.split(':')[1].trim()
+        this.showError(Messages[errorCode], false)
+
+        return
+      }
+
+      this.showError(error.message, false)
+    }
   }
 
-  /**
-   * Validate user input
-   * @param {*} input - string
-   * @param {*} shouldBeNumber - boolean
-   * @param {*} question - function
-   */
-  validateInput (input, shouldBeNumber, question) {
-    if (input === '') {
-      console.log('\x1b[33m%s\x1b[0m', Messages.EMPTY_VALUE)
-      this[question]()
-    }
-    if (shouldBeNumber) {
-      const regExp = /^[0-9]*\.?[0-9]*$/;
-      if (input.match(regExp) === null) {
-        console.log('\x1b[33m%s\x1b[0m', Messages.NUMBER_ONLY)
-        this[question]()
+  printSellOrder (response) {
+    const limitMaker = response.orderReports.find(order => order.type === 'LIMIT_MAKER')
+    const stopLossLimit = response.orderReports.find(order => order.type === 'STOP_LOSS_LIMIT')
+    this.newLine()
+    console.log('\x1b[32m%s\x1b[0m', '\tSELL OCO ORDER SUCCESSFULLY FILLED!!!')
+    console.log('\tDate:', moment(response.transactTime).format("DD-MM-YYYY h:mm:ss"))
+    console.log(`\tTake profit limit order placed at ${limitMaker.price} (${+limitMaker.origQty} ${this._coinName.toUpperCase()})`)
+    console.log(`\tStop loss placed at ${stopLossLimit.stopPrice} (${+stopLossLimit.origQty} ${this._coinName.toUpperCase()})`)
+    console.log(`\tStop limit placed at ${stopLossLimit.price} (${+stopLossLimit.origQty} ${this._coinName.toUpperCase()})`)
+    this.askRunBotAgain()
+  }
+
+  askRunBotAgain () {
+    this.newLine()
+    rl.question("Run bot again? (yes/no) ", (ans) => {
+      if (ans !== 'yes' && ans !== 'no') {
+        this.askRunBotAgain()
+
+        return
       }
-      if (input < 0) {
-        console.log('\x1b[33m%s\x1b[0m', Messages.LIMIT_ZERO)
-        this[question]()
+      if (ans === 'yes') {
+        this._btcBalance = 0
+        this._usdtBalance = 0
+        this.startBot()
+
+        return
       }
-    }
-    // if (question.name === 'askBtcToUse') {
-    //   if (input > _btcBalance) {
-    //     console.log('\x1b[33m%s\x1b[0m', 'Value should not be more than available BTC')
-    //     question()
-    //   }
-    // }
+
+      process.exit()
+    })
   }
 
   /**
@@ -302,7 +312,7 @@ class Bot {
     this._takeProfit = 0
     this._btcToUse = 0
     this._coinName = ''
-    this.order = null
+    this._order = null
     this._order_fill = null
   }
 
@@ -320,6 +330,13 @@ class Bot {
     }
         
     return 0
+  }
+
+  logToJson (json) {
+    fs.writeFile('response.json', JSON.stringify(json), 'utf8', (err) => {
+      if (err) console.log('error logging to json');
+      console.log('success logging to json')
+    });
   }
 
   printBotTitle () {

@@ -5,7 +5,7 @@ export default {
   NUMBER_ONLY : 'Value should be number and decimal only.',
   LIMIT_ZERO : 'Minimum value is 0.',
   EMPTY_API : 'Please put your api key & secret on settings.ini file.',
-  INVALID_API : 'Invalid settings.ini file!.',
+  INVALID_API : 'Invalid settings.ini.',
   MARKET_LOT_SIZE : "Total BTC is too high or too low.",
   INVALID_COIN_NAME: 'Invalid coin name.'
 }
