@@ -41,8 +41,9 @@ class Bot {
     fills: [                                  
       {                                       
         // price: '0.00002813',                  
-        // price: '0.00010999',                  
-        price: '0.00009053',                  
+        price: '0.00010999',                  
+        // price: '0.00009053',                  
+        // price: '0.00001476',                  
         qty: '10.00000000',                   
         commission: '0.01000000',             
         commissionAsset: 'SKY',               
@@ -52,8 +53,9 @@ class Bot {
   } 
   _order_fill = {                                       
     // price: '0.00002813',                  
-    // price: '0.00010999',                  
-    price: '0.00009053',                  
+    price: '0.00010999',                  
+    // price: '0.00009053',                  
+    // price: '0.00001476',                  
     qty: '10.00000000',                   
     commission: '0.01000000',             
     commissionAsset: 'SKY',               
@@ -83,7 +85,7 @@ class Bot {
 
   askTakeProfit () {
     this.newLine()
-    rl.question("Take profit at: ", (profitAns) => {
+    rl.question("Take profit at (%): ", (profitAns) => {
       this.validateInput(profitAns.trim(), true, 'askTakeProfit')
       this._takeProfit = profitAns.trim()
       this.askBtcToUse()
@@ -153,21 +155,11 @@ class Bot {
       console.log('\tType:', this._order.type)
       console.log('\tExecuted Quantity:', +this._order.executedQty)
       console.log('\tAmount Quantity:', +this._order.origQty)
-      console.log('\tAverage Price: ', +this._order_fill.price)
+      console.log('\tBought at: ', +this._order_fill.price)
       this.newLine()
       this.requestSellOrder()
     }
   }
-
-  // getSellOrderPrice (price, noOfDecPlaces) {
-  //   if ((noOfDecPlaces > 0) && (this.countDecimal(price) > noOfDecPlaces)) {
-  //     // return roundTo(price, noOfDecPlaces)
-  //     return price.toFixed(noOfDecPlaces)
-  //     // return price
-  //   }
-
-  //   return price
-  // }
 
   getSellOrderPrice (price) {
     const buyPrice = +this._order_fill.price
@@ -177,7 +169,7 @@ class Bot {
       return newPrice.toFixed(noOfDecPlaces)
     }
 
-    return price
+    return newPrice
   }
 
   printAndGetSellOrderConfig () {
@@ -185,20 +177,20 @@ class Bot {
     const stopPrice = this.getSellOrderPrice(this._stopValue)
     const stopLimitPrice = this.getSellOrderPrice(this._stopLimitValue)
     this.newLine()
-    console.log(`Take profit at ${sellPrice} (${this._takeProfit}%)`)
-    console.log(`Stop at ${sellPrice} (${this._stopValue}%)`)
-    console.log(`Stop limit at ${stopLimitPrice} (${this._stopLimitValue}%)`)
+    console.log(`> Take profit at ${sellPrice} (${this._takeProfit}%)`)
+    console.log(`> Stop at ${stopPrice} (${this._stopValue}%)`)
+    console.log(`> Stop limit at ${stopLimitPrice} (${this._stopLimitValue}%)`)
     this.newLine()
     console.log(`[${this.getTime()}]` ,'Requesting OCO order...')
 
     return [sellPrice, stopPrice, stopLimitPrice]
   }
 
-  requestSellOrder () {
+  async requestSellOrder () {
     const [sellPrice, stopPrice, stopLimitPrice] = this.printAndGetSellOrderConfig()
     const pair = `${this._coinName.toUpperCase()}${this.__PAIR}`
     // try {
-    //   const response = this._binanceClient.orderOco({
+    //   const response = await this._binanceClient.orderOco({
     //     symbol: pair,
     //     side: 'SELL',
     //     quantity: +this._order.executedQty,
@@ -208,9 +200,9 @@ class Bot {
     //   })
     //   console.log({ response })
     // } catch (error) {
+    //   console.log('nag error')
     //   console.log({ error: error.message })
     // }
-
   }
 
   /**
