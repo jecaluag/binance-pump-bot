@@ -6,34 +6,89 @@ import moment from 'moment'
 
 import Messages from './constants'
 
+/**
+ * Readline instance
+ */
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
 });
 
+/**
+ * Logic for pump bot
+ * @author John Erniemar Caluag
+ * @since 2021.02.01
+ * @version 1.0
+ */
 class Bot {
-  _binanceClient = null
-  _stopValue = 55
-  _stopLimitValue = 50
-  _btcBalance = 0
-  _usdtBalance = 0
-  _takeProfit = 0
-  _btcToUse = 0
-  _coinName = ''
-  _order = null
-  _order_fill = null
+  /**
+   * Coin pair
+   */
   __PAIR = 'BTC'
 
   /**
-   * Run the bot
+   * Binance client
    */
-  async run () {
-    // this.printBotTitle()
+  _binanceClient = null
+  
+  /**
+   * OCO order stop value
+   */
+  _stopValue = 55
+
+  /**
+   * OCO order stop limit value
+   */
+  _stopLimitValue = 50
+
+  /**
+   * Account BTC balance
+   */
+  _btcBalance = 0
+
+  /**
+   * Account USDT balance
+   */
+  _usdtBalance = 0
+
+  /**
+   * Take profit percentage
+   */
+  _takeProfit = 0
+
+  /**
+   * Amount BTC will be use to buy
+   */
+  _btcToUse = 0
+
+  /**
+   * Coin name
+   */
+  _coinName = ''
+
+  /**
+   * Buy order data from binance api
+   */
+  _order = null
+
+  /**
+   * Buy order fill data
+   */
+  _order_fill = null
+
+  /**
+   * Start the bot
+   */
+  async start () {
+    this.printBotTitle()
     await this.connectToBinance()
-    this.startBot()
+    this.runBot()
   }
 
-  async startBot () {
+  /**
+   * Run the bot process
+   */
+  async runBot () {
     await this.getBalance()
     console.log(`Available BTC: ${this._btcBalance}`)
     console.log(`Available USDT: ${this._usdtBalance}`)
@@ -41,11 +96,17 @@ class Bot {
     this.processQuestions()
   }
 
+  /**
+   * Start and process asking questons
+   */
   processQuestions () {
     this.resetInputValues()
     this.askTakeProfit ()
   }
 
+  /**
+   * Run ask take profit question
+   */
   askTakeProfit () {
     this.newLine()
     rl.question("Take profit at (%): ", (profitAns) => {
@@ -56,6 +117,9 @@ class Bot {
     })
   }
   
+  /**
+   * Ask btc to use question
+   */
   askBtcToUse() {
     this.newLine()
     rl.question("Total BTC to use: ", (totalAns) => {
@@ -66,13 +130,16 @@ class Bot {
     })
   }
   
+  /**
+   * Ask coin name question
+   */
   askCoinName () {
     this.newLine()
     rl.question("Coin name: ", (coinAns) => {
       if (this.validateInput(coinAns.trim(), false, 'askCoinName') === true) {
         this._coinName = coinAns.trim()
         this.newLine()
-        // this.placeMarketBuy()
+        this.placeMarketBuy()
       }
     })
   }
@@ -82,6 +149,7 @@ class Bot {
    * @param {*} input - string
    * @param {*} shouldBeNumber - boolean
    * @param {*} question - function
+   * @return boolean
    */
   validateInput (input, shouldBeNumber, question) {
     if (input === '') {
@@ -117,6 +185,9 @@ class Bot {
     return true
   }
 
+  /**
+   * Place market buy order
+   */
   async placeMarketBuy () {
     console.log(`[${this.getTime()}]` ,'Placing market order...')
     const pair = `${this._coinName.toUpperCase()}${this.__PAIR}`
@@ -151,6 +222,9 @@ class Bot {
     }
   }
 
+  /**
+   * Print the order response if the market order successfully filled
+   */
   async printOrder () {
     if (this._order !== null || this._order_fill !== null) {
       this.newLine()
@@ -160,12 +234,17 @@ class Bot {
       console.log('\tType:', this._order.type)
       console.log('\tExecuted Quantity:', +this._order.executedQty)
       console.log('\tAmount Quantity:', +this._order.origQty)
-      console.log('\tBought at: ', +this._order_fill.price)
+      console.log('\tBought at:', +this._order_fill.price)
       this.newLine()
       this.requestSellOrder()
     }
   }
 
+  /**
+   * Calculate the sell price and format to correct decimal number
+   * @param {*} price 
+   * @returns new price
+   */
   getSellOrderPrice (price) {
     const buyPrice = +this._order_fill.price
     const noOfDecPlaces = this.countDecimal(buyPrice)
@@ -177,6 +256,10 @@ class Bot {
     return newPrice
   }
 
+  /**
+   * Get the sell order prices and print requesting order
+   * @return sell prices
+   */
   printAndGetSellOrderConfig () {
     const sellPrice = this.getSellOrderPrice(this._takeProfit)
     const stopPrice = this.getSellOrderPrice(this._stopValue)
@@ -187,6 +270,9 @@ class Bot {
     return [sellPrice, stopPrice, stopLimitPrice]
   }
 
+  /**
+   * Start request of sell OCO order
+   */
   async requestSellOrder () {
     const [sellPrice, stopPrice, stopLimitPrice] = this.printAndGetSellOrderConfig()
     const pair = `${this._coinName.toUpperCase()}${this.__PAIR}`
@@ -201,18 +287,22 @@ class Bot {
       })
       this.printSellOrder(response)
     } catch (error) {
-      console.log('\x1b[41m%s\x1b[0m', 'Failed to request OCO order.')
+      console.log('\x1b[41m%s\x1b[0m', 'Failed to request OCO order. Please manually sell the coin on binance.com')
       if (error.message.split(':').length > 1) {
         const errorCode = error.message.split(':')[1].trim()
-        this.showError(Messages[errorCode], false)
+        this.showError(Messages[errorCode])
 
         return
       }
 
-      this.showError(error.message, false)
+      this.showError(error.message)
     }
   }
 
+  /**
+   * Print and format sell order response
+   * @param {*} response 
+   */
   printSellOrder (response) {
     const limitMaker = response.orderReports.find(order => order.type === 'LIMIT_MAKER')
     const stopLossLimit = response.orderReports.find(order => order.type === 'STOP_LOSS_LIMIT')
@@ -225,6 +315,9 @@ class Bot {
     this.askRunBotAgain()
   }
 
+  /**
+   * Ask user if they want to run the bot again
+   */
   askRunBotAgain () {
     this.newLine()
     rl.question("Run bot again? (yes/no) ", (ans) => {
@@ -236,7 +329,7 @@ class Bot {
       if (ans === 'yes') {
         this._btcBalance = 0
         this._usdtBalance = 0
-        this.startBot()
+        this.runBot()
 
         return
       }
@@ -247,6 +340,7 @@ class Bot {
 
   /**
    * Get the api secret and key from settings.ini and validate its value
+   * @returns api key and secret
    */
   getAndValidateApiKeyAndSecret () {
     const apiSettings = ini.parse(fs.readFileSync('./settings.ini', 'utf-8'))
@@ -281,6 +375,9 @@ class Bot {
     }
   }
 
+  /**
+   * Get user btc and usdt balance on binance
+   */
   async getBalance () {
     try {
       const response = await this._binanceClient.accountInfo()
@@ -292,12 +389,21 @@ class Bot {
     }
   }
 
+  /**
+   * Handle Binance API error
+   * @param {*} error 
+   */
   handleBinanceError (error) {
     console.log(JSON.parse(error.body).code)
     console.log(`Error: ${JSON.parse(error.body).msg}`)
     process.exit(0)
   }
 
+  /**
+   * Show error message
+   * @param {*} message 
+   * @param {*} exitApp 
+   */
   showError (message, exitApp = true) {
     console.log('\x1b[41m%s\x1b[0m', `[ERROR]: ${message}`)
     if (exitApp === true) {
@@ -316,14 +422,25 @@ class Bot {
     this._order_fill = null
   }
 
+  /**
+   * New console line
+   */
   newLine () {
     console.log('')
   }
 
+  /**
+   * Get and format current time
+   */
   getTime () {
     return moment(new Date().valueOf()).format("DD-MM-YYYY h:mm:ss")
   }
 
+  /**
+   * Count decimal number 
+   * @param value
+   * @returns decimal count
+   */
   countDecimal (value) {
     if (Math.floor(value) !== value) {
       return value.toString().split(".")[1].length || 0
@@ -332,29 +449,34 @@ class Bot {
     return 0
   }
 
-  logToJson (json) {
-    fs.writeFile('response.json', JSON.stringify(json), 'utf8', (err) => {
+  /**
+   * Log object to json
+   * @param {*} object 
+   */
+  logToJson (object) {
+    fs.writeFile('response.json', JSON.stringify(object), 'utf8', (err) => {
       if (err) console.log('error logging to json');
       console.log('success logging to json')
     });
-  }
+  } 
 
+  /**
+   * Print bot title to console
+   */
   printBotTitle () {
     console.log(`
-    ▄████▄  ▄▄▄      ███▄    █ ▄████▄ ▓█████ ██▀███  ▒█████  █    ██  ██████     ██▓███  █    ██ ███▄ ▄███▓██▓███      ▄▄▄▄   ▒█████ ▄▄▄█████▓
-    ▒██▀ ▀█ ▒████▄    ██ ▀█   █▒██▀ ▀█ ▓█   ▀▓██ ▒ ██▒██▒  ██▒██  ▓██▒██    ▒    ▓██░  ██▒██  ▓██▓██▒▀█▀ ██▓██░  ██▒   ▓█████▄▒██▒  ██▓  ██▒ ▓▒
-    ▒▓█    ▄▒██  ▀█▄ ▓██  ▀█ ██▒▓█    ▄▒███  ▓██ ░▄█ ▒██░  ██▓██  ▒██░ ▓██▄      ▓██░ ██▓▓██  ▒██▓██    ▓██▓██░ ██▓▒   ▒██▒ ▄█▒██░  ██▒ ▓██░ ▒░
-    ▒▓▓▄ ▄██░██▄▄▄▄██▓██▒  ▐▌██▒▓▓▄ ▄██▒▓█  ▄▒██▀▀█▄ ▒██   ██▓▓█  ░██░ ▒   ██▒   ▒██▄█▓▒ ▓▓█  ░██▒██    ▒██▒██▄█▓▒ ▒   ▒██░█▀ ▒██   ██░ ▓██▓ ░ 
-    ▒ ▓███▀ ░▓█   ▓██▒██░   ▓██▒ ▓███▀ ░▒████░██▓ ▒██░ ████▓▒▒▒█████▓▒██████▒▒   ▒██▒ ░  ▒▒█████▓▒██▒   ░██▒██▒ ░  ░   ░▓█  ▀█░ ████▓▒░ ▒██▒ ░ 
-    ░ ░▒ ▒  ░▒▒   ▓▒█░ ▒░   ▒ ▒░ ░▒ ▒  ░░ ▒░ ░ ▒▓ ░▒▓░ ▒░▒░▒░░▒▓▒ ▒ ▒▒ ▒▓▒ ▒ ░   ▒▓▒░ ░  ░▒▓▒ ▒ ▒░ ▒░   ░  ▒▓▒░ ░  ░   ░▒▓███▀░ ▒░▒░▒░  ▒ ░░   
-      ░  ▒    ▒   ▒▒ ░ ░░   ░ ▒░ ░  ▒   ░ ░  ░ ░▒ ░ ▒░ ░ ▒ ▒░░░▒░ ░ ░░ ░▒  ░ ░   ░▒ ░    ░░▒░ ░ ░░  ░      ░▒ ░        ▒░▒   ░  ░ ▒ ▒░    ░    
-    ░         ░   ▒     ░   ░ ░░          ░    ░░   ░░ ░ ░ ▒  ░░░ ░ ░░  ░  ░     ░░       ░░░ ░ ░░      ░  ░░           ░    ░░ ░ ░ ▒   ░      
-    ░ ░           ░  ░        ░░ ░        ░  ░  ░        ░ ░    ░          ░                ░           ░               ░         ░ ░          
-    ░                          ░                                                                                             ░                 
+    ▄▄▄      ▓█████     ██▓███   █    ██  ███▄ ▄███▓ ██▓███   ▄▄▄▄    ▒█████  ▄▄▄█████▓
+    ▒████▄    ▓█   ▀    ▓██░  ██▒ ██  ▓██▒▓██▒▀█▀ ██▒▓██░  ██▒▓█████▄ ▒██▒  ██▒▓  ██▒ ▓▒
+    ▒██  ▀█▄  ▒███      ▓██░ ██▓▒▓██  ▒██░▓██    ▓██░▓██░ ██▓▒▒██▒ ▄██▒██░  ██▒▒ ▓██░ ▒░
+    ░██▄▄▄▄██ ▒▓█  ▄    ▒██▄█▓▒ ▒▓▓█  ░██░▒██    ▒██ ▒██▄█▓▒ ▒▒██░█▀  ▒██   ██░░ ▓██▓ ░ 
+     ▓█   ▓██▒░▒████▒   ▒██▒ ░  ░▒▒█████▓ ▒██▒   ░██▒▒██▒ ░  ░░▓█  ▀█▓░ ████▓▒░  ▒██▒ ░ 
+     ▒▒   ▓▒█░░░ ▒░ ░   ▒▓▒░ ░  ░░▒▓▒ ▒ ▒ ░ ▒░   ░  ░▒▓▒░ ░  ░░▒▓███▀▒░ ▒░▒░▒░   ▒ ░░   
+      ▒   ▒▒ ░ ░ ░  ░   ░▒ ░     ░░▒░ ░ ░ ░  ░      ░░▒ ░     ▒░▒   ░   ░ ▒ ▒░     ░    
+      ░   ▒      ░      ░░        ░░░ ░ ░ ░      ░   ░░        ░    ░ ░ ░ ░ ▒    ░      
+          ░  ░   ░  ░               ░            ░             ░          ░ ░           
+                                                                    ░                   
     `);
-    this.newLine()
-    console.log('#######################################################################################################################################################')
   }
 }
 
-new Bot().run()
+new Bot().start()
