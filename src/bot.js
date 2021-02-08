@@ -81,8 +81,15 @@ export default class Bot {
    */
   async start () {
     await this.connectToBinance()
-    this.printBotTitle()
-    this.runBot()
+    await this.test()
+    // this.printBotTitle()
+    // this.runBot()
+  }
+
+  async test () {
+    const books = await this._binanceClient.exchangeInfo()
+    const baseAssets = [...new Set(books.symbols.map(book => book.baseAsset))]
+    console.log(baseAssets)
   }
 
   /**
