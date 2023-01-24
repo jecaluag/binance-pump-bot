@@ -1,1 +1,1 @@
-# AE PUMP BOT
+# AE PUMP BOT (CLI)
